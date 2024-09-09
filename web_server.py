@@ -1,0 +1,54 @@
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import RedirectResponse
+import httpx
+from db.database import init_pool, close_pool
+from db.connection_manager import get_db_connection
+
+app = FastAPI()
+
+CLIENT_ID = '51781233'
+CLIENT_SECRET = 'Tme5VJdA5L5Cc5Z84x39'
+REDIRECT_URI = 'http://localhost:8000/callback'
+AUTH_URL = 'https://oauth.vk.com/authorize'
+TOKEN_URL = 'https://oauth.vk.com/access_token'
+
+@app.on_event("startup")
+async def on_startup():
+    await init_pool()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await close_pool()
+
+@app.get('/')
+async def read_root():
+    return {"message": "Не та страница долбаёб"}
+
+@app.get('/login')
+async def login():
+    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=friends&response_type=code"
+    return RedirectResponse(auth_url)
+
+@app.get('/callback')
+async def callback(code: str, conn = get_db_connection()):
+    async with httpx.AsyncClient() as client:
+        token_response = await client.get(
+            TOKEN_URL,
+            params={
+                'client_id': CLIENT_ID,
+                'client_secret': CLIENT_SECRET,
+                'redirect_uri': REDIRECT_URI,
+                'code': code
+            }
+        )
+    token_data = token_response.json()
+    access_token = token_data.get('access_token')
+    print(access_token)
+    if access_token:
+        await conn.execute("INSERT INTO api_keys (access_token) VALUES ($1)", access_token)
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=8000)
+
+         

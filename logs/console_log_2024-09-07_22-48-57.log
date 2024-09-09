@@ -1,0 +1,88 @@
+CONSOLE - 2024-09-07 22:48:57
+	Start polling
+--------------------------------------------------
+
+CONSOLE - 2024-09-07 22:48:59
+	Run polling for bot @nik4vkbot id=6617538418 - 'vk_bot'
+--------------------------------------------------
+
+CONSOLE - 2024-09-07 22:49:34
+	Update id=829508794 is not handled. Duration 11 ms by bot id=6617538418
+--------------------------------------------------
+
+CONSOLE - 2024-09-07 22:49:34
+	Cause exception while process update id=829508794 by bot id=6617538418
+UndefinedTableError: relation "users" does not exist
+--------------------------------------------------
+Traceback (most recent call last):
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 309, in _process_update
+    response = await self.feed_update(bot, update, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 158, in feed_update
+    response = await self.update.wrap_outer_middleware(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/middlewares/error.py", line 25, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/middlewares/user_context.py", line 49, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/fsm/middleware.py", line 42, in __call__
+    return await handler(event, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 276, in _listen_update
+    return await self.propagate_event(update_type=update_type, event=event, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 142, in propagate_event
+    return await observer.wrap_outer_middleware(_wrapped, event=event, data=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 137, in _wrapped
+    return await self._propagate_event(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/router.py", line 162, in _propagate_event
+    response = await observer.trigger(event, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/event/telegram.py", line 121, in trigger
+    return await wrapped_inner(event, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/aiogram/dispatcher/event/handler.py", line 43, in call
+    return await wrapped()
+           ^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/bot.py", line 23, in start
+    result = await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", msg.from_user.id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/asyncpg/connection.py", line 749, in fetchrow
+    data = await self._execute(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/asyncpg/connection.py", line 1794, in _execute
+    result, _ = await self.__execute(
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/asyncpg/connection.py", line 1892, in __execute
+    result, stmt = await self._do_execute(
+                   ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/asyncpg/connection.py", line 1925, in _do_execute
+    stmt = await self._get_statement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/nikita/Programming/bot_project/venv/lib/python3.11/site-packages/asyncpg/connection.py", line 433, in _get_statement
+    statement = await self._protocol.prepare(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 166, in prepare
+asyncpg.exceptions.UndefinedTableError: relation "users" does not exist
+CONSOLE - 2024-09-07 22:50:11
+	Received SIGINT signal
+--------------------------------------------------
+
+CONSOLE - 2024-09-07 22:50:11
+	Polling stopped for bot @nik4vkbot id=6617538418 - 'vk_bot'
+--------------------------------------------------
+
+CONSOLE - 2024-09-07 22:50:11
+	Polling stopped
+--------------------------------------------------
+
