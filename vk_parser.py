@@ -18,7 +18,7 @@ async def add_data_to_db(group_data: dict, group_id: int):
         date = convert_time(post_date)
 
         async with get_db_connection() as conn:
-            async with conn.transaction(isolation="REPEATABLE READ"):
+            async with conn.transaction(isolation="read_committed"):
                 result = await conn.fetchval("SELECT * FROM cached_post_ids WHERE post_id=$1", post_id)
                 if result is not None:
                     return

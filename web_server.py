@@ -45,7 +45,8 @@ async def callback(code: str, conn = get_db_connection()):
     access_token = token_data.get('access_token')
     print(access_token)
     if access_token:
-        await conn.execute("INSERT INTO api_keys (access_token) VALUES ($1)", access_token)
+        async with conn.transaction(isolation="read_committed"):
+            await conn.execute("INSERT INTO api_keys (access_token) VALUES ($1)", access_token)
 
 if __name__ == '__main__':
     import uvicorn

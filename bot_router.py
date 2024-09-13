@@ -16,7 +16,7 @@ async def auth(msg: types.Message):
     button = InlineKeyboardButton(text="Перейти на сайт", url="http://localhost:8000/login")
     keyboard = InlineKeyboardMarkup().add(button)
     async with get_db_connection() as conn:
-        async with conn.transaction(isolation='serializable'):
+        async with conn.transaction(isolation="read_committed"):
             pass 
     await msg.answer("Нажмите кнопку ниже, чтобы перейти на страницу аутентификации:", reply_markup=keyboard)
 
