@@ -9,9 +9,12 @@ import asyncio
 import logging
 import os
 from logger.logger import setup_logger
+from aiogram.types import CallbackQuery
 
 logger = setup_logger()
 load_dotenv()
+
+FASTAPI_URL = 'http://localhost:8000/login'
 
 bot = Bot(token=os.environ.get("BOT_TOKEN"))
 dp = Dispatcher()
@@ -19,10 +22,10 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def start(msg: types.Message):
     async with get_db_connection() as conn:
-        async with conn.transaction(isolation='serializable'):
+        async with conn.transaction(isolation='read_committed'):
             result = await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", msg.from_user.id)
             if not result:
-                await conn.execute("INSERT INTO users VALUES ($1)", msg.from_user.id)
+                await conn.execute("INSERT INTO users (user_id, user_limit, status) VALUES ($1, $2, 'not_authorized')", msg.from_user.id, 0)
                 await msg.answer("Добро пожаловать!")
             else:
                 await msg.answer("Добро пожаловать обратно!")
@@ -31,14 +34,20 @@ async def start(msg: types.Message):
 async def help(msg: types.Message):
     await msg.answer("Здесь будет инструкция...")
 
-@dp.message(Command("open_link"))
+@dp.message(Command("authorize"))
 async def open_link(msg: types.Message):
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(
-        text="GitHub", url="https://github.com")
+        text="Авторизоваться", url=f"{FASTAPI_URL}?user_id={msg.from_user.id}", callback_data="auth")
     )
 
-    await msg.answer("Нажми кнопку ниже, чтобы открыть ссылку в браузере:", reply_markup=builder.as_markup())
+    await msg.answer("Авторизуйтесь через ВК:", reply_markup=builder.as_markup())
+
+@dp.callback_query_handler(lambda query: query.data == "auth" and query.data.startswith("auth"))
+async def open_github_link(query: CallbackQuery):
+    async with get_db_connection() as conn:
+        async with conn.transaction(isolation="read_committed"):
+            conn.execute("UPDATE users SET status = 'in progress' WHERE user_id = $2", query.from_user.id)
 
 async def main():
     try:

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Query, Request, Depends
 from fastapi.responses import RedirectResponse
 import httpx
 from db.database import init_pool, close_pool
@@ -25,12 +25,14 @@ async def read_root():
     return {"message": "Не та страница долбаёб"}
 
 @app.get('/login')
-async def login():
-    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=friends&response_type=code"
+async def login(user_id: int = Query(...)):
+    # Сохраняем user_id и передаем его через redirect_uri
+    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=friends&response_type=code&state={user_id}"
     return RedirectResponse(auth_url)
 
 @app.get('/callback')
-async def callback(code: str, conn = get_db_connection()):
+async def callback(code: str, state: int, conn = get_db_connection()):
+    user_id = state
     async with httpx.AsyncClient() as client:
         token_response = await client.get(
             TOKEN_URL,
@@ -43,10 +45,11 @@ async def callback(code: str, conn = get_db_connection()):
         )
     token_data = token_response.json()
     access_token = token_data.get('access_token')
-    print(access_token)
     if access_token:
         async with conn.transaction(isolation="read_committed"):
-            await conn.execute("INSERT INTO api_keys (access_token) VALUES ($1)", access_token)
+            await conn.execute("INSERT INTO users (api_key) VALUES ($1) WHERE user_id=$2", access_token, user_id)
+            await conn.execute("UPDATE users SET status='authorized' WHERE user_id=$1", user_id)
+            await conn.execute("UPDATE users SET user_limit=3 WHERE user_id=$1", user_id)
 
 if __name__ == '__main__':
     import uvicorn
