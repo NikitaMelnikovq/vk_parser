@@ -12,7 +12,7 @@ class ConnectionPool:
         self.pool = await asyncpg.create_pool(
             min_size=1,
             max_size=100,
-            user=os.environ.get("USER"),
+            user='postgres',
             password=os.environ.get("PASSWORD"),
             database=os.environ.get("DBNAME"),
             host="localhost",
@@ -36,6 +36,7 @@ async def put_connection(conn):
     await connection_pool.put_connection(conn)
 
 async def init_pool():
+    print(os.environ.get("USER"))
     await connection_pool.init()
 
 async def close_pool():

@@ -39,7 +39,7 @@ async def get_group_id(url: str) -> int:
 
 async def check_limit(user_id: int):
     async with get_db_connection() as conn:
-        async with conn.transaction():
+        async with conn.transaction(isolation="read_committed"):
             count = await conn.fetchval("SELECT COUNT(*) FROM subscriptions WHERE user_id=$1", user_id)
             limit = 3
             if count == 1:
@@ -50,7 +50,7 @@ async def check_limit(user_id: int):
 async def add_group(user_id, link):
     group_id = await get_group_id(link)
     async with get_db_connection() as conn:
-        async with conn.transaction():
+        async with conn.transaction(isolation="read_committed"):
             try: 
                 await conn.execute("""
                                         INSERT INTO groups (group_id)
@@ -73,7 +73,7 @@ async def add_group(user_id, link):
             
 async def get_group_count():
     async with get_db_connection() as conn:
-        async with conn.transaction():
+        async with conn.transaction(isolation="read_committed"):
             try:
                 result = await conn.fetchval('SELECT COUNT(*) FROM your_table')
                 return result
@@ -84,7 +84,7 @@ async def get_group_count():
 
 async def get_api_keys():
     async with get_db_connection() as conn:
-        async with conn.transaction():    
+        async with conn.transaction(isolation="read_committed"):    
             try:
                 groups_count = await get_group_count()
                 if groups_count == -1:
@@ -100,7 +100,7 @@ async def get_api_keys():
             
 async def get_group_list():
      async with get_db_connection() as conn:
-        async with conn.transaction():
+        async with conn.transaction(isolation="read_committed"):
             try:
                 groups = await conn.fetch("SELECT group_id FROM groups")
                 groups = [row['group_id'] for row in groups]

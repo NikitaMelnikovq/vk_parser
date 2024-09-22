@@ -22,16 +22,16 @@ async def on_shutdown():
 
 @app.get('/')
 async def read_root():
-    return {"message": "Не та страница долбаёб"}
+    return {"message": "Такой страницы не существует"}
 
 @app.get('/login')
 async def login(user_id: int = Query(...)):
-    # Сохраняем user_id и передаем его через redirect_uri
     auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=friends&response_type=code&state={user_id}"
+
     return RedirectResponse(auth_url)
 
 @app.get('/callback')
-async def callback(code: str, state: int, conn = get_db_connection()):
+async def callback(code: str, state: int):
     user_id = state
     async with httpx.AsyncClient() as client:
         token_response = await client.get(
@@ -43,13 +43,21 @@ async def callback(code: str, state: int, conn = get_db_connection()):
                 'code': code
             }
         )
+        
     token_data = token_response.json()
     access_token = token_data.get('access_token')
+
     if access_token:
-        async with conn.transaction(isolation="read_committed"):
-            await conn.execute("INSERT INTO users (api_key) VALUES ($1) WHERE user_id=$2", access_token, user_id)
-            await conn.execute("UPDATE users SET status='authorized' WHERE user_id=$1", user_id)
-            await conn.execute("UPDATE users SET user_limit=3 WHERE user_id=$1", user_id)
+        async with get_db_connection() as conn:
+            async with conn.transaction(isolation="read_committed"):
+                await conn.execute("""
+        INSERT INTO users (api_key) 
+        VALUES ($1)
+        ON CONFLICT (user_id) 
+        DO UPDATE SET api_key = EXCLUDED.api_key;
+    """, access_token)
+                await conn.execute("UPDATE users SET status='authorized' WHERE user_id=$1", user_id)
+                await conn.execute("UPDATE users SET user_limit=3 WHERE user_id=$1", user_id)
 
 if __name__ == '__main__':
     import uvicorn

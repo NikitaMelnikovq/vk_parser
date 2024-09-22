@@ -13,7 +13,7 @@ class AddingGroup(StatesGroup):
 
 @router.message(Command("/authorize"))
 async def auth(msg: types.Message):
-    button = InlineKeyboardButton(text="Перейти на сайт", url="http://localhost:8000/login")
+    button = InlineKeyboardButton(text="Перейти на сайт", url="http://95.164.69.218:8000/login")
     keyboard = InlineKeyboardMarkup().add(button)
     async with get_db_connection() as conn:
         async with conn.transaction(isolation="read_committed"):

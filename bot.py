@@ -24,6 +24,7 @@ async def start(msg: types.Message):
     async with get_db_connection() as conn:
         async with conn.transaction(isolation='read_committed'):
             result = await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", msg.from_user.id)
+            print(result)
             if not result:
                 await conn.execute("INSERT INTO users (user_id, user_limit, status) VALUES ($1, $2, 'not_authorized')", msg.from_user.id, 0)
                 await msg.answer("Добро пожаловать!")
@@ -43,7 +44,7 @@ async def open_link(msg: types.Message):
 
     await msg.answer("Авторизуйтесь через ВК:", reply_markup=builder.as_markup())
 
-@dp.callback_query_handler(lambda query: query.data == "auth" and query.data.startswith("auth"))
+@dp.callback_query(lambda query: query.data == "auth" and query.data.startswith("auth"))
 async def open_github_link(query: CallbackQuery):
     async with get_db_connection() as conn:
         async with conn.transaction(isolation="read_committed"):
