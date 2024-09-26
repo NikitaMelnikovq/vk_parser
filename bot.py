@@ -10,6 +10,7 @@ import logging
 import os
 from logger.logger import setup_logger
 from aiogram.types import CallbackQuery
+from keyboards.keyboard import keyboard
 
 logger = setup_logger()
 load_dotenv()
@@ -24,16 +25,25 @@ async def start(msg: types.Message):
     async with get_db_connection() as conn:
         async with conn.transaction(isolation='read_committed'):
             result = await conn.fetchrow("SELECT * FROM users WHERE user_id=$1", msg.from_user.id)
-            print(result)
             if not result:
                 await conn.execute("INSERT INTO users (user_id, user_limit, status) VALUES ($1, $2, 'not_authorized')", msg.from_user.id, 0)
-                await msg.answer("Добро пожаловать!")
+                await msg.answer("Добро пожаловать!", reply_markup=keyboard)
             else:
-                await msg.answer("Добро пожаловать обратно!")
+                await msg.answer("Добро пожаловать обратно!", reply_markup=keyboard)
             
 @dp.message(Command("help"))
 async def help(msg: types.Message):
-    await msg.answer("Здесь будет инструкция...")
+    await msg.answer("""
+    Добро пожаловать в бота для отслеживания новых постов в группах ВК!
+    Список доступных команд:
+        /start - начать работу с ботом
+        /help - помощь
+        /authorize - авторизоваться через ВК
+        /add_group - добавить группу
+        /remove_group - удалить группу
+        /updates_on - подключить уведомления 
+        /updates_off - отключить уведомления
+""", reply_markup=keyboard)
 
 @dp.message(Command("authorize"))
 async def open_link(msg: types.Message):

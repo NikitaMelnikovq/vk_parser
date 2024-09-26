@@ -48,16 +48,16 @@ async def callback(code: str, state: int):
     access_token = token_data.get('access_token')
 
     if access_token:
-        async with get_db_connection() as conn:
-            async with conn.transaction(isolation="read_committed"):
-                await conn.execute("""
-        INSERT INTO users (api_key) 
-        VALUES ($1)
-        ON CONFLICT (user_id) 
-        DO UPDATE SET api_key = EXCLUDED.api_key;
-    """, access_token)
-                await conn.execute("UPDATE users SET status='authorized' WHERE user_id=$1", user_id)
-                await conn.execute("UPDATE users SET user_limit=3 WHERE user_id=$1", user_id)
+        async with get_db_connection() as conn, conn.transaction(isolation="read_committed"):
+            await conn.execute("""
+                                INSERT INTO users (api_key, status, user_limit) 
+                                VALUES ($1, 'authorized', 3)
+                                ON CONFLICT (user_id) 
+                                DO UPDATE 
+                                SET api_key = EXCLUDED.api_key, 
+                                    status = 'authorized', 
+                                    user_limit = 3;
+                            """, access_token)
 
 if __name__ == '__main__':
     import uvicorn

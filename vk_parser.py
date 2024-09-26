@@ -17,13 +17,12 @@ async def add_data_to_db(group_data: dict, group_id: int):
         post_link = f"https://vk.com/wall-{group_id}_{post_id}"
         date = convert_time(post_date)
 
-        async with get_db_connection() as conn:
-            async with conn.transaction(isolation="read_committed"):
-                result = await conn.fetchval("SELECT * FROM cached_post_ids WHERE post_id=$1", post_id)
-                if result is not None:
-                    return
-                await conn.execute("INSERT INTO cached_post_ids VALUES ($1)", post_id)
-                await conn.execute("INSERT INTO posts VALUES ($1, $2, $3, $4, $5)", post_id, post_text, post_link, date)
+        async with get_db_connection() as conn, conn.transaction(isolation="read_committed"):
+            result = await conn.fetchval("SELECT * FROM cached_post_ids WHERE post_id=$1", post_id)
+            if result is not None:
+                return
+            await conn.execute("INSERT INTO cached_post_ids VALUES ($1)", post_id)
+            await conn.execute("INSERT INTO posts VALUES ($1, $2, $3, $4, $5)", post_id, post_text, post_link, date)
 
 async def get_droup_data(group_id, api_key):
     async with aiohttp.ClientSession() as session:

@@ -36,7 +36,6 @@ async def put_connection(conn):
     await connection_pool.put_connection(conn)
 
 async def init_pool():
-    print(os.environ.get("USER"))
     await connection_pool.init()
 
 async def close_pool():

@@ -2,23 +2,33 @@ from aiogram import F, types, Router
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from utils.functions import check_link, check_limit, add_group
+from utils.functions import check_link, check_limit, add_group, get_group_list, remove_group
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from db.connection_manager import get_db_connection
+from keyboards.inline import inline_keyboard
 
 router = Router()
 
 class AddingGroup(StatesGroup):
     add_group = State()
 
-@router.message(Command("/authorize"))
+@router.message(Command("authorize"))
 async def auth(msg: types.Message):
-    button = InlineKeyboardButton(text="Перейти на сайт", url="http://95.164.69.218:8000/login")
-    keyboard = InlineKeyboardMarkup().add(button)
-    async with get_db_connection() as conn:
-        async with conn.transaction(isolation="read_committed"):
-            pass 
-    await msg.answer("Нажмите кнопку ниже, чтобы перейти на страницу аутентификации:", reply_markup=keyboard)
+    async with get_db_connection() as conn, conn.transaction():
+        conn.execute("UPDATE users SET status = 'in progress' WHERE user_id = $2", msg.from_user.id) 
+    await msg.answer("Нажмите кнопку ниже, чтобы перейти на страницу аутентификации:", reply_markup=inline_keyboard)
+
+@router.message(Command("updates_on"))
+async def turn_off_updates(msg: types.Message):
+    async with get_db_connection() as conn, conn.transaction():
+        await conn.execute("UPDATE users SET updates = TRUE WHERE user_id = $1", msg.from_user.id)
+    await msg.answer("Вы успешно включили уведомления о новых постах!")
+
+@router.message(Command("updates_off"))
+async def turn_off_updates(msg: types.Message):
+    async with get_db_connection() as conn, conn.transaction():
+        await conn.execute("UPDATE users SET updates = FALSE WHERE user_id = $1", msg.from_user.id)
+    await msg.answer("Вы успешно отключили уведомления о новых постах!")
 
 @router.message(Command("add_group"))
 async def set_add_group(msg: types.Message, state: FSMContext):
@@ -30,25 +40,62 @@ async def stop_getting_link(msg: types.Message, state: FSMContext):
     await state.clear()
     await msg.answer("Вы отменили ввод!") 
 
-
 @router.message(AddingGroup.add_group, F.text)
-async def accept_link(msg: types.Message):
-    correct_link = await check_link(msg.text.strip())
-    limit = await check_limit(msg.from_user.id)
-    if correct_link and limit:
-        result = await add_group(msg.from_user.id, msg.text.strip())
-        if result:
-            await msg.answer("Вы успешно добавили группу! Если хотите продолжить, введите ещё одну ссылку, или нажмите /stop")
-        else:
-            await msg.answer("Произошла неизвестная ошибка. Обратитесь к администратору или попробуйте позднее.")
-    elif not limit and correct_link:
-        await msg.answer("Вы достигли лимита! Больше групп добавить не получиться( Оформите подписку, чтобы увеличить количество групп")
-    elif limit and not correct_link:
-        await msg.answer("Вы ввели некорректную ссылку!")
-    else:
-        await msg.answer("Вы ввели некорректную ссылку, а также исчерпали свой лимит на добавление групп! Приобретите подписку!")
+async def accept_link(msg: types.Message, state: FSMContext):
+    user_id = msg.from_user.id
+    link = msg.text.strip()
 
+    correct_link = await check_link(link)
+    limit = await check_limit(user_id)
+
+    if not correct_link and not limit:
+        await msg.answer(
+            "Вы ввели некорректную ссылку, а также исчерпали свой лимит на добавление групп! "
+            "Приобретите подписку!"
+        )
+        return
+
+    if not correct_link:
+        await msg.answer("Вы ввели некорректную ссылку!")
+        return
+
+    if not limit:
+        await msg.answer(
+            "Вы достигли лимита! Больше групп добавить не получится. "
+            "Оформите подписку, чтобы увеличить количество групп."
+        )
+        await state.clear()
+        return
+
+    result = await add_group(user_id, link)
+    if result:
+        await msg.answer(
+            "Вы успешно добавили группу! Если хотите продолжить, введите ещё одну ссылку, или нажмите /stop."
+        )
+    else:
+        await msg.answer("Произошла неизвестная ошибка. Обратитесь к администратору или попробуйте позднее.")
 
 @router.message(AddingGroup.add_group, ~F.text)
 async def got_not_link(msg: types.Message):
     await msg.answer("Введите, ссылку, пожалуйста. Если хотите прекратить,  нажмите /stop") 
+
+@router.message(Command("remove_group"))
+async def delete_group(msg: types.Message):
+    await msg.answer("Введите ссылку на группу, которую хотите удалить: ")
+    result = await remove_group(msg.from_user.id, msg.text.strip())
+
+    if result:
+        await msg.answer("Вы успешно удалили группу!")
+
+    else:   
+        await msg.answer("Произошла неизвестная ошибка. Обратитесь к администратору или попробуйте позднее.")
+
+@router.message(Command("get_group_list"))
+async def get_groups(msg: types.Message):
+    groups = await get_group_list(msg.from_user.id)
+    groups = [str(group) for group in groups]
+    if groups == -1:
+        await msg.answer("Произошла ошибка при получении списка групп!")
+        return
+    else:
+        await msg.answer("Ваши группы:\n" + "\n".join(groups))
