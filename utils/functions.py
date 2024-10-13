@@ -2,6 +2,8 @@ import aiohttp
 import logging
 import asyncpg
 
+from requests.exceptions import HTTPError   
+
 from db.database import db
 from datetime import datetime
 from dotenv import load_dotenv
@@ -12,7 +14,12 @@ logger = logging.getLogger(__name__)
 VK_GROUP_API_URL = "https://api.vk.com/method/groups.getById"
 API_VERSION = "5.154"
 
-def check_nested_key(d, *keys):
+def calculate_limit(group_count: int, subscribed: bool) -> int:
+    limit = 20 if subscribed else 3
+    return limit if group_count < limit else 0
+
+
+def check_nested_key(d, *keys) -> dict:
     for key in keys:
         try:
             d = d[key]
@@ -37,6 +44,7 @@ async def get_group_time(group_id: int):
 async def get_user_api_key(user_id):
     async with db.transaction():
         result = await db.first("SELECT API_KEY from users WHERE user_id=$1", user_id)
+
     return None if not result else result["api_key"]
 
 
@@ -54,7 +62,6 @@ async def check_link(link: str, user_id) -> bool:
             async with session.get(url) as response:
                 response.raise_for_status()
                 data = await response.json()
-                print(data)
                 return "response" in data
                 
     except aiohttp.ClientError:
@@ -62,8 +69,6 @@ async def check_link(link: str, user_id) -> bool:
 
 
 async def check_limit(user_id: int):
-    print(f"Начата работа функции {check_limit.__name__}")
-
     try:
         async with db.transaction():
             authorized = await db.scalar("SELECT status FROM users WHERE user_id=$1", user_id)
@@ -79,36 +84,50 @@ async def check_limit(user_id: int):
 
             return groups_count < limit
 
-    except Exception:
-        print(f"Произошла ошибка в функции {check_limit.__name__}. Проверьте логи ошибок.")
+    except (
+        asyncpg.exceptions.ProtocolViolationError, 
+        asyncpg.exceptions.QueryCanceledError, 
+        ValueError
+    ) as e:
+        logging.error(f"Произошла ошибка в функции {check_limit.__name__}: {e}")
         return None
 
 
 async def get_group_id(link: str, user_id: int):
-    print(f"Начата работа функции {get_group_id.__name__}")
 
     group_id = link.split("/")[-1]
-    user_api_key = await get_user_api_key(user_id)
 
     if group_id.startswith("club"):
         group_id = group_id.replace("club", "")
         return group_id
-    else:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{VK_GROUP_API_URL}?group_id={group_id}&access_token={user_api_key}&v=5.199") as response:
-                    response.raise_for_status()
-                    data = await response.json()
-                    return data["response"]["groups"][0]["id"]
+    
+    user_api_key = await get_user_api_key(user_id)
 
-        except Exception:
-            print(f"Произошла ошибка в функции {get_group_id.__name__}. Проверьте логи ошибок.")
-            return None
+    url = (
+        f"{VK_GROUP_API_URL}?group_id={group_id}"
+        f"&access_token={user_api_key}&v=5.199"
+    )
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+                return data["response"]["groups"][0]["id"]
+
+    except (KeyError, HTTPError) as e:
+        logging.error(f"Произошла ошибка в функции {get_group_id.__name__}: {e}")
+        return None
 
 
 async def get_group_name(group_id: int, user_id: int):
     user_api_key = await get_user_api_key(user_id)
-    url = f"{VK_GROUP_API_URL}?group_id={group_id}&access_token={user_api_key}&v=5.199"
+
+    url = (
+        f"{VK_GROUP_API_URL}?group_id={group_id}"
+        f"&access_token={user_api_key}&v=5.199"
+    )
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -116,7 +135,8 @@ async def get_group_name(group_id: int, user_id: int):
                 data = await response.json()
                 return data["response"]["groups"][0]["name"]
             
-    except KeyError:
+    except (KeyError, HTTPError) as e:
+        logging.error(f"Произошла ошибка в функции {get_group_name.__name__}: {e}")
         return None
 
 
@@ -166,7 +186,7 @@ async def remove_group(user_id, link):
         asyncpg.exceptions.QueryCanceledError, 
         ValueError
     ) as e:
-        logging.error(f"Произошла ошибка в функции {add_group.__name__}: {e}")
+        logging.error(f"Произошла ошибка в функции {remove_group.__name__}: {e}")
         return None
     
 
@@ -181,9 +201,8 @@ async def get_group_count():
         asyncpg.exceptions.QueryCanceledError, 
         ValueError
     ) as e:
-        logging.error(f"Произошла ошибка в функции {add_group.__name__}: {e}")
+        logging.error(f"Произошла ошибка в функции {get_group_count.__name__}: {e}")
         return None
-
 
 async def get_api_keys():
         try:
@@ -203,7 +222,7 @@ async def get_api_keys():
             asyncpg.exceptions.QueryCanceledError, 
             ValueError
         ) as e:
-            logging.error(f"Произошла ошибка в функции {add_group.__name__}: {e}")
+            logging.error(f"Произошла ошибка в функции {get_api_keys.__name__}: {e}")
             return None
             
 
@@ -220,5 +239,5 @@ async def get_group_ids():
             asyncpg.exceptions.QueryCanceledError, 
             ValueError
         ) as e:
-            logging.error(f"Произошла ошибка в функции {add_group.__name__}: {e}")
+            logging.error(f"Произошла ошибка в функции {get_group_ids.__name__}: {e}")
             return None 
