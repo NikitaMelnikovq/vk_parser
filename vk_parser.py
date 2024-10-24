@@ -1,46 +1,40 @@
 import logging 
 import asyncio 
-import traceback
 
 import aiohttp
 import schedule
 import asyncpg
 
 from db.database import close_db, db, init_db
-from utils.functions import check_nested_key, get_api_keys, get_group_ids, get_group_time
+from utils.functions import check_nested_key, get_api_keys, get_group_ids, get_group_time, convert_msec_to_date
 
 
 async def add_data_to_db(group_data: dict, group_id: int):
-        logging.INFO("Добавление данных в базу данных")
-
         post_id = group_data["id"]
         post_text = group_data["text"]
         post_date = group_data["date"]
         post_link = f"https://vk.com/wall-{group_id}_{post_id}"
 
-        try:
-            async with db.transaction():
-                result = await db.scalar(
-                    "SELECT * FROM cached_post_ids WHERE post_id=$1", post_id
-                    )
-                if result is not None:
-                    return
-                
-                await db.status(
-                    "INSERT INTO cached_post_ids VALUES ($1)", post_id
-                    )
-                await db.status(
-                    "INSERT INTO posts VALUES ($1, $2, $3, $4, $5)",
-                    post_id, post_text, post_link, post_date
+        async with db.transaction():
+            result = await db.scalar(
+                "SELECT * FROM cached_post_ids WHERE post_id=$1", post_id
                 )
+            
+            if result is not None:
+                return
+            
+            await db.status(
+                "INSERT INTO cached_post_ids VALUES ($1)", post_id
+                )
+            
+            await db.status(
+                "INSERT INTO posts VALUES ($1, $2, $3, $4, $5)",
+                post_id, post_text, post_link, convert_msec_to_date(post_date), group_id
+            )
 
-        except (asyncpg.exceptions.ProtocolViolationError, asyncpg.exceptions.QueryCanceledError, ValueError):
-            logging.error(f"Произошла ошибка в функции {add_data_to_db.__name__}")
-            return None
-        
-        logging.INFO("Данные успешно добавлены в базу данных")
 
 async def get_group_data(group_id, api_key):
+    print("Начата работа фукнции get_group_data")
     date = await get_group_time(group_id)
 
     async with aiohttp.ClientSession() as session:
@@ -90,7 +84,7 @@ async def execute():
         logging.info("Не удалось получить список ключей")
         return 
     if not groups:
-        print("Не удалось получить список групп")
+        logging.info("Не удалось получить список групп")
         return
     await start_parsing(api_keys, groups)
 
@@ -109,8 +103,12 @@ async def main():
         schedule.every(1).minutes.do(schedule_task)
         
         await scheduler()
-    except Exception as e:
-        print(f"Ошибка в файле vk_parser в методе main, ошибка: {traceback.print_exc()}",)
+    except (
+        asyncpg.exceptions.ProtocolViolationError, 
+        asyncpg.exceptions.QueryCanceledError, 
+        ValueError
+    ) as e:
+        logging.error(f"Произошла ошибка. Проверьте логи. {e}")
     finally:
         await close_db()
 

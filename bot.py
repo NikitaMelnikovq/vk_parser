@@ -1,16 +1,16 @@
 import asyncio
 import logging
 import os
-import aio_pika
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import Command, CommandStart
 from dotenv import load_dotenv
+from aiogram.types import CallbackQuery
+
 from bot_router import router
 from db.database import db
 from db.database import init_db, close_db
-from aiogram.types import CallbackQuery
 from keyboards.keyboard import keyboard
 
 load_dotenv()
@@ -19,43 +19,6 @@ FASTAPI_URL = 'http://localhost:8000/login'
 
 bot = Bot(token=os.environ.get("BOT_TOKEN"))
 dp = Dispatcher()
-
-async def on_message(message: aio_pika.IncomingMessage):
-    async with message.process():
-        text = message.body.decode()
-        await bot.send_message(chat_id=863190796, text=text)
-
-        print("Уведомление отправлено в Telegram")
-
-async def start_consumer():
-    connection = await aio_pika.connect_robust("amqp://guest:guest@localhost/")
-    channel = await connection.channel()
-
-    exchange = await channel.declare_exchange(
-        "db_updates", aio_pika.ExchangeType.FANOUT
-    )
-
-    queue = await channel.declare_queue(exclusive=True)
-
-    await queue.bind(exchange)
-
-    await queue.consume(on_message)
-
-
-async def process_update(message):
-    # Here, implement the logic that should happen when a new update is received.
-    # For example, fetch new data from the database and send messages to users.
-    # Example:
-    # data = await db.all("SELECT * FROM new_data_table")
-    # for row in data:
-    #     await bot.send_message(chat_id=row.user_id, text=row.message)
-    pass
-
-
-async def on_message(message: aio_pika.IncomingMessage):
-    async with message.process():
-        await bot.send_message(123456789, "New post in group!")
-
 
 @dp.message(CommandStart())
 async def start(msg: types.Message):
@@ -66,7 +29,8 @@ async def start(msg: types.Message):
             await msg.answer("Добро пожаловать!", reply_markup=keyboard)
         else:
             await msg.answer("Добро пожаловать обратно!", reply_markup=keyboard)
-            
+
+
 @dp.message(Command("help"))
 async def help(msg: types.Message):
     await msg.answer("""
@@ -81,6 +45,7 @@ async def help(msg: types.Message):
         /updates_off - отключить уведомления
 """, reply_markup=keyboard)
 
+
 @dp.message(Command("authorize"))
 async def open_link(msg: types.Message):
     builder = InlineKeyboardBuilder()
@@ -90,23 +55,23 @@ async def open_link(msg: types.Message):
 
     await msg.answer("Авторизуйтесь через ВК:", reply_markup=builder.as_markup())
 
+
 @dp.callback_query(lambda query: query.data == "auth" and query.data.startswith("auth"))
 async def open_github_link(query: CallbackQuery):
     async with db.transaction():
         db.status("UPDATE users SET status = 'in progress' WHERE user_id = $2", query.from_user.id)
 
+
 @dp.message(Command("get_chat_id"))
 async def get_chat_id(msg: types.Message):
     await msg.answer(str(msg.chat.id))
+
 
 async def main():
     try:
         await init_db()
 
         logging.basicConfig(level=logging.INFO)
-
-        loop = asyncio.get_event_loop()
-        loop.create_task(start_consumer())
         
         dp.include_router(router)
 
@@ -117,5 +82,6 @@ async def main():
     finally:
         await close_db()
         
+
 if __name__ == "__main__":
     asyncio.run(main())

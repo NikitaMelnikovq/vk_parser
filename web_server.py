@@ -1,10 +1,18 @@
-import httpx
+import os
 
+import httpx
 from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
+from cryptography.fernet import Fernet
+
 from db.database import db, init_db, close_db
 
 app = FastAPI()
+encryption_key = os.getenv("ENCRYPTION_KEY")
+cipher = Fernet(encryption_key.encode())
+
+def encrypt_token(token: str) -> str:
+    return cipher.encrypt(token.encode()).decode()
 
 CLIENT_ID = '51781233'
 CLIENT_SECRET = 'Tme5VJdA5L5Cc5Z84x39'
@@ -26,7 +34,7 @@ async def read_root():
 
 @app.get('/login')
 async def login(user_id: int = Query(...)):
-    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=groups,wall&response_type=code&state={user_id}"
+    auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=groups,wall,offline&response_type=code&state={user_id}"
 
     return RedirectResponse(auth_url)
 
@@ -48,6 +56,8 @@ async def callback(code: str, state: int):
     access_token = token_data.get('access_token')
 
     if access_token:
+        encrypted_token = encrypt_token(access_token)
+        print(encrypted_token)
         async with db.transaction():
                 await db.status("""
                     INSERT INTO users (user_id, api_key, status, user_limit)
@@ -63,7 +73,7 @@ async def callback(code: str, state: int):
                                         WHEN users.status = 'authorized' THEN users.user_limit
                                         ELSE EXCLUDED.user_limit
                                     END;
-                    """, user_id, access_token)
+                    """, user_id, encrypted_token)
 
 if __name__ == '__main__':
     import uvicorn
