@@ -3,8 +3,16 @@ from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from utils.functions import check_link, check_limit, add_group, get_group_ids, remove_group
+from utils.functions import (
+    check_link, 
+    check_limit, 
+    add_group, 
+    get_group_ids, 
+    remove_group,
+    get_group_names
+)
 from db.database import db
+
 from keyboards.inline import inline_keyboard
 
 router = Router()
@@ -102,8 +110,7 @@ async def delete_group(msg: types.Message):
 
 @router.message(Command("get_group_list"))
 async def get_groups(msg: types.Message):
-    groups = await get_group_ids(msg.from_user.id)
-    groups = [str(group) for group in groups]
+    groups = await get_group_names()
 
     if not groups:
         await msg.answer("Произошла ошибка при получении списка групп!")

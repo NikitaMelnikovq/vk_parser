@@ -1,11 +1,13 @@
 import asyncio 
 import json
 import logging
+import os 
 
 import aiohttp
 import aio_pika
 import asyncpg
 import schedule
+from dotenv import load_dotenv
 
 from db.database import (
     close_db,
@@ -22,10 +24,12 @@ from utils.functions import (
     get_group_name_from_db
 )
 
+load_dotenv()
+
 async def publish_message(message):
     try:
         connection = await aio_pika.connect_robust(
-            "amqp://guest:guest@localhost/"
+            os.environ.get("RABBITMQ_URL")
         )
 
         async with connection:
@@ -42,10 +46,10 @@ async def publish_message(message):
 async def add_data_to_db(group_data: dict, group_id: int):
         post_id = group_data["id"]
         post_text = group_data["text"]
-        post_date = convert_msec_to_date(group_data["date"])
+        post_date = convert_msec_to_date(group_data["date"]).isoformat()
         post_link = f"https://vk.com/wall-{group_id}_{post_id}"
         
-        group_name = get_group_name_from_db(group_id)
+        group_name = await get_group_name_from_db(group_id)
 
         async with db.transaction():
             result = await db.scalar(

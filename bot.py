@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command, CommandStart
 from dotenv import load_dotenv
+from datetime import datetime
 from aiogram.types import CallbackQuery
 
 from bot_router import router
@@ -70,6 +71,61 @@ async def open_github_link(query: CallbackQuery):
 async def get_chat_id(msg: types.Message):
     await msg.answer(str(msg.chat.id))
 
+async def send_messages(bot: Bot, text: str, group_id: int):
+    """
+    Отправка сообщений всем авторизованным пользователям.
+    """
+    try:
+        chat_ids = []
+        
+        async with db.transaction():
+            user_ids = await db.all("SELECT user_id FROM users_groups_rel WHERE group_id = $1", group_id)
+
+            chat_ids = []
+            for (user_id,) in user_ids:  # Unpack the tuple
+                # Fetch chat_id for each user_id and unpack the result
+                chat_id_row = await db.first("SELECT chat_id FROM users WHERE user_id = $1", user_id)
+                if chat_id_row:
+                    chat_id = chat_id_row[0]  # Extract the integer value
+                    chat_ids.append(chat_id)
+
+        send_tasks = [
+            bot.send_message(chat_id=chat_id, text=text)
+            for chat_id in chat_ids
+        ]
+
+        results = await asyncio.gather(*send_tasks, return_exceptions=True)
+
+        for chat_id, result in zip(chat_ids, results):
+            if isinstance(result, Exception):
+                logger.error(f"Не удалось отправить сообщение пользователю {chat_id}: {result}")
+            else:
+                logger.info(f"Сообщение успешно отправлено пользователю {chat_id}.")
+    except Exception as e:
+        logger.exception(f"Ошибка при отправке сообщений: {e}")
+
+async def process_message(message: aio_pika.IncomingMessage, bot: Bot):
+    """
+    Обработка одного сообщения из очереди RabbitMQ.
+    """
+    async with message.process():
+        try:
+            body = message.body.decode()
+            data = json.loads(body)
+            text = f"""
+                {datetime.fromisoformat(data['post_date'])}
+                {data['group_name']}
+                {data['post_text']}
+                {data['post_link']}
+            """.strip()
+
+            logger.info(f"Обработка сообщения: {data['post_id']}")
+
+            await send_messages(bot, text, data['group_id'])
+
+        except Exception as e:
+            logger.exception(f"Ошибка при обработке сообщения: {e}")
+
 
 async def consume_messages(bot: Bot):
     """
@@ -80,10 +136,9 @@ async def consume_messages(bot: Bot):
             connection = await aio_pika.connect_robust(RABBITMQ_URL)
             async with connection:
                 channel = await connection.channel()
-                # Установка QoS для контроля количества одновременно обрабатываемых сообщений
                 await channel.set_qos(prefetch_count=10)
-                queue = await channel.declare_queue(QUEUE_NAME, durable=True)
-                logger.info(f"Подключено к очереди '{QUEUE_NAME}' в RabbitMQ.")
+                queue = await channel.declare_queue("posts_queue", durable=True)
+                logger.info(f"Подключено к очереди posts_queue в RabbitMQ.")
 
                 async with queue.iterator() as queue_iter:
                     async for message in queue_iter:
@@ -92,52 +147,22 @@ async def consume_messages(bot: Bot):
         except Exception as e:
             logger.exception(f"Ошибка подключения или потребления сообщений: {e}")
             logger.info("Повторная попытка подключения через 5 секунд...")
-            await asyncio.sleep(5)  # Ожидание перед повторным подключением
+            await asyncio.sleep(5)
 
 async def main():
     try:
         await init_db()
 
+        logging.basicConfig(level=logging.INFO)
 
         consumer_task = asyncio.create_task(consume_messages(bot))
-
-        # connection = await aio_pika.connect_robust(
-        #     "amqp://guest:guest@localhost/"
-        # )
-
-        # async with connection:
-        #     channel = await connection.channel()
-        #     queue = await channel.declare_queue('your_queue_name', durable=True)
-
-        #     async with queue.iterator() as queue_iter:
-        #         async for message in queue_iter:
-        #             async with message.process():
-        #                 body = message.body.decode()
-        #                 data = json.loads(body)
-        #                 text = f"""
-        #                     {data['post_date']}
-        #                     {data['group_name']}
-        #                     {data['post_text']}
-        #                     {data['post_link']}
-        #                 """
-
-        #                 async with db.transaction():
-        #                     user_ids = await db.fetch("SELECT user_id FROM users_groups_rel WHERE group_id = $1", data['group_id'])
-
-        #                     chat_ids = []
-        #                     for user_id in user_ids:
-        #                         chat_id = await db.fetchval("SELECT chat_id FROM users WHERE user_id = $1", user_id)
-        #                         chat_ids.append(chat_id)
-
-        #                     for chat_id in chat_ids:
-        #                         await bot.send_message(chat_id, text)
-
-        logging.basicConfig(level=logging.INFO)
         
         dp.include_router(router)
 
         await dp.start_polling(bot)
         
+        await consumer_task
+
     except Exception as e:
         print(e)
     finally:

@@ -5,14 +5,16 @@ from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
 from cryptography.fernet import Fernet
 
-from db.database import db, init_db, close_db
+from db.database import (
+    close_db,
+    db,
+    init_db
+)
+
 
 app = FastAPI()
 encryption_key = os.getenv("ENCRYPTION_KEY")
 cipher = Fernet(encryption_key.encode())
-
-def encrypt_token(token: str) -> str:
-    return cipher.encrypt(token.encode()).decode()
 
 CLIENT_ID = os.environ.get('CLIENT_ID')
 CLIENT_SECRET = os.environ.get('CLIENT_SECRET')
@@ -20,23 +22,32 @@ REDIRECT_URI = 'http://localhost:8000/callback'
 AUTH_URL = 'https://oauth.vk.com/authorize'
 TOKEN_URL = 'https://oauth.vk.com/access_token'
 
+
+def encrypt_token(token: str) -> str:
+    return cipher.encrypt(token.encode()).decode()
+
+
 @app.on_event("startup")
 async def on_startup():
     await init_db()
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await close_db()
 
+
 @app.get('/')
 async def read_root():
     return {"message": "Такой страницы не существует"}
+
 
 @app.get('/login')
 async def login(user_id: int = Query(...)):
     auth_url = f"{AUTH_URL}?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&scope=groups,wall,offline&response_type=code&state={user_id}"
 
     return RedirectResponse(auth_url)
+
 
 @app.get('/callback')
 async def callback(code: str, state: int):
@@ -74,6 +85,7 @@ async def callback(code: str, state: int):
                                         ELSE EXCLUDED.user_limit
                                     END;
                     """, user_id, encrypted_token)
+
 
 if __name__ == '__main__':
     import uvicorn

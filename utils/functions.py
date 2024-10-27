@@ -202,7 +202,7 @@ async def get_api_keys() -> list:
                 return None
 
             limit = int(groups_count / 20) if groups_count % 20 == 0 else int(groups_count / 20) + 1 
-            rows = await db.all('SELECT api_key FROM users LIMIT $1', limit)
+            rows = await db.all("SELECT api_key FROM users WHERE status = 'authorized' LIMIT $1", limit)
             api_keys = [decrypt_token(row['api_key']) for row in rows]
 
             return api_keys
@@ -212,5 +212,12 @@ async def get_group_ids() -> list:
     async with db.transaction():
         groups = await db.all("SELECT * FROM user_groups")
         groups = [int(row['group_id']) for row in groups]
+
+        return groups
+    
+async def get_group_names():
+    async with db.transaction():
+        groups = await db.all("SELECT * FROM user_groups")
+        groups = [row['group_name'] for row in groups]
 
         return groups
