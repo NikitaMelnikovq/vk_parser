@@ -20,7 +20,7 @@ from utils.functions import (
     get_api_keys,
     get_group_ids,
     get_group_time,
-    convert_msec_to_date,
+    convert_sec_to_date,
     get_group_name_from_db
 )
 
@@ -46,7 +46,7 @@ async def publish_message(message):
 async def add_data_to_db(group_data: dict, group_id: int):
         post_id = group_data["id"]
         post_text = group_data["text"]
-        post_date = convert_msec_to_date(group_data["date"]).isoformat()
+        post_date = convert_sec_to_date(group_data["date"]).isoformat()
         post_link = f"https://vk.com/wall-{group_id}_{post_id}"
         
         group_name = await get_group_name_from_db(group_id)

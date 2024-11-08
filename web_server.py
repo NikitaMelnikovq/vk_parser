@@ -1,8 +1,12 @@
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Query
 from fastapi.responses import RedirectResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi import Request
 from cryptography.fernet import Fernet
 
 from db.database import (
@@ -11,8 +15,8 @@ from db.database import (
     init_db
 )
 
+templates = Jinja2Templates(directory="templates")
 
-app = FastAPI()
 encryption_key = os.getenv("ENCRYPTION_KEY")
 cipher = Fernet(encryption_key.encode())
 
@@ -27,15 +31,16 @@ def encrypt_token(token: str) -> str:
     return cipher.encrypt(token.encode()).decode()
 
 
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await init_db()
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
+    yield
     await close_db()
 
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get('/')
 async def read_root():
@@ -50,7 +55,7 @@ async def login(user_id: int = Query(...)):
 
 
 @app.get('/callback')
-async def callback(code: str, state: int):
+async def callback(request: Request, code: str, state: int):
     user_id = state
     async with httpx.AsyncClient() as client:
         token_response = await client.get(
@@ -68,27 +73,29 @@ async def callback(code: str, state: int):
 
     if access_token:
         encrypted_token = encrypt_token(access_token)
-        print(encrypted_token)
         async with db.transaction():
-                await db.status("""
-                    INSERT INTO users (user_id, api_key, status, user_limit)
-                    VALUES ($1, $2, 'authorized', 3)
-                    ON CONFLICT (user_id)
-                    DO UPDATE
-                    SET api_key = EXCLUDED.api_key,
-                        status = CASE 
-                                    WHEN users.status = 'authorized' THEN users.status
-                                    ELSE EXCLUDED.status
-                                END,
-                        user_limit = CASE 
-                                        WHEN users.status = 'authorized' THEN users.user_limit
-                                        ELSE EXCLUDED.user_limit
-                                    END;
-                    """, user_id, encrypted_token)
+            await db.status("""
+                INSERT INTO users (user_id, api_key, status, user_limit)
+                VALUES ($1, $2, 'authorized', 3)
+                ON CONFLICT (user_id)
+                DO UPDATE
+                SET api_key = EXCLUDED.api_key,
+                    status = CASE 
+                                WHEN users.status = 'authorized' THEN users.status
+                                ELSE EXCLUDED.status
+                            END,
+                    user_limit = CASE 
+                                    WHEN users.status = 'authorized' THEN users.user_limit
+                                    ELSE EXCLUDED.user_limit
+                                END;
+                """, user_id, encrypted_token)
+
+        return templates.TemplateResponse("success.html", {"request": request, "user_id": user_id})
+    else:
+        return templates.TemplateResponse("failure.html", {"request": request})
+
 
 
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host='0.0.0.0', port=8000)
-
-         

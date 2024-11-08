@@ -19,6 +19,7 @@ from keyboards.keyboard import keyboard
 load_dotenv()
 
 FASTAPI_URL = os.environ.get("FASTAPI_URL")
+URL = os.environ.get("URL")
 logger = logging.getLogger(__name__)
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL")
 
@@ -55,7 +56,7 @@ async def help(msg: types.Message):
 async def open_link(msg: types.Message):
     builder = InlineKeyboardBuilder()
     builder.row(types.InlineKeyboardButton(
-        text="Авторизоваться", url=f"{FASTAPI_URL}?user_id={msg.from_user.id}", callback_data="auth")
+        text="Авторизоваться", url=f"{URL}?user_id={msg.from_user.id}", callback_data="auth")
     )
 
     await msg.answer("Авторизуйтесь через ВК:", reply_markup=builder.as_markup())
@@ -82,11 +83,10 @@ async def send_messages(bot: Bot, text: str, group_id: int):
             user_ids = await db.all("SELECT user_id FROM users_groups_rel WHERE group_id = $1", group_id)
 
             chat_ids = []
-            for (user_id,) in user_ids:  # Unpack the tuple
-                # Fetch chat_id for each user_id and unpack the result
+            for (user_id,) in user_ids:
                 chat_id_row = await db.first("SELECT chat_id FROM users WHERE user_id = $1", user_id)
                 if chat_id_row:
-                    chat_id = chat_id_row[0]  # Extract the integer value
+                    chat_id = chat_id_row[0]
                     chat_ids.append(chat_id)
 
         send_tasks = [

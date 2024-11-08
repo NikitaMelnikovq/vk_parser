@@ -7,7 +7,6 @@ from utils.functions import (
     check_link, 
     check_limit, 
     add_group, 
-    get_group_ids, 
     remove_group,
     get_group_names
 )
